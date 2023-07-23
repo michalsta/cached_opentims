@@ -87,8 +87,8 @@ class CachedOpenTIMS:
             self.starts = np.zeros(shape=(self.OT.max_frame+1, self.OT.max_scan+1), dtype=np.uint64)
             self.counts = np.zeros(shape=(self.OT.max_frame + 1, self.OT.max_scan + 1), dtype=np.uint64)
             self.index = index(self.backend.frame.values, self.backend.scan.values, self.starts, self.counts)
-            np.save(cache_dir / 'starts.npy')
-            np.save(cache_dir / 'counts.npy')
+            np.save(cache_dir / 'starts.npy', self.starts)
+            np.save(cache_dir / 'counts.npy', self.counts)
         else:
             self.backend = mmapped_df.open_dataset(cache_dir)
             self.starts = np.load(cache_dir / 'starts.npy')

@@ -102,7 +102,7 @@ class CachedOpenTIMS:
             frames = np.array(frames, dtype=np.uint64)
         arr_size = count(frames, min_scan, max_scan, self.counts)
         acc = {}
-        for colname in (self.backend if conlnames is None else colnames):
+        for colname in (self.backend if colnames is None else colnames):
             T = np.empty(shape=(arr_size,), dtype=self.backend.dtypes[colname])
             fill_data(frames, min_scan, max_scan,self.starts,self.counts,self.backend[colname].values,T)
             acc[colname] = T

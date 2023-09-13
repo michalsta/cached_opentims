@@ -71,12 +71,15 @@ def mz_filtered_indices(frames, scan_min, scan_max, starts, counts, src, T):
 
 
 class CachedOpenTIMS:
-    def __init__(self, path, tmpdir=None):
+    def __init__(self, path, tmpdir=None, dont_recalculate=True):
         path = Path(path)
         assert tmpdir is None
         cache_dir = Path(str(path) + ".cache")
         self.OT = OpenTIMS(path)
+
         if not cache_dir.exists():
+            if dont_recalculate:
+                raise OSError(f"OpenTIMS cache is not present for the dataset {path}")
             with mmapped_df.DatasetWriter(cache_dir) as DW:
                 for frame in self.OT:
                     # print(frame)

@@ -86,7 +86,7 @@ class CachedOpenTIMS:
             if dont_recalculate:
                 raise
 
-            with mmapped_df.DatasetWriter(cache_dir) as DW:
+            with mmapped_df.DatasetWriter(cache_dir, overwrite_dir=True) as DW:
                 for frame in self.OT:
                     # print(frame)
                     DW.append_df(pd.DataFrame(frame))

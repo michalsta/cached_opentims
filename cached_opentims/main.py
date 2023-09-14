@@ -77,9 +77,15 @@ class CachedOpenTIMS:
         cache_dir = Path(str(path) + ".cache")
         self.OT = OpenTIMS(path)
 
-        if not cache_dir.exists():
+        try:
+            self.backend = mmapped_df.open_dataset(cache_dir)
+            self.starts = np.load(cache_dir / "starts.npy")
+            self.counts = np.load(cache_dir / "counts.npy")
+
+        except FileNotFoundError:
             if dont_recalculate:
-                raise OSError(f"OpenTIMS cache is not present for the dataset {path}")
+                raise
+
             with mmapped_df.DatasetWriter(cache_dir) as DW:
                 for frame in self.OT:
                     # print(frame)
@@ -101,10 +107,6 @@ class CachedOpenTIMS:
             )
             np.save(cache_dir / "starts.npy", self.starts)
             np.save(cache_dir / "counts.npy", self.counts)
-        else:
-            self.backend = mmapped_df.open_dataset(cache_dir)
-            self.starts = np.load(cache_dir / "starts.npy")
-            self.counts = np.load(cache_dir / "counts.npy")
 
     def query(self, frames, colnames=None):
         return box_query(frames, self.OT.min_scan, self.OT.max_scan, colnames)

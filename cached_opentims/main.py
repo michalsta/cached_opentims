@@ -1,8 +1,10 @@
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import numba
+from tqdm import tqdm
 from opentimspy import OpenTIMS
 import mmapped_df
 
@@ -87,7 +89,7 @@ class CachedOpenTIMS:
                 raise
 
             with mmapped_df.DatasetWriter(cache_dir, overwrite_dir=True) as DW:
-                for frame in self.OT:
+                for frame in tqdm(self.OT, desc=sys.argv[0]+ ": uncompressing TIMS dataset into cached_opentims"):
                     # print(frame)
                     DW.append_df(pd.DataFrame(frame))
 

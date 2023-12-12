@@ -89,7 +89,12 @@ class CachedOpenTIMS:
                 raise
 
             with mmapped_df.DatasetWriter(cache_dir, overwrite_dir=True) as DW:
-                for frame in tqdm(self.OT, desc=sys.argv[0]+ ": uncompressing TIMS dataset into cached_opentims"):
+                for frame in tqdm(
+                    self.OT,
+                    total=len(self.OT.frames["Id"]),
+                    desc=sys.argv[0]
+                    + ": uncompressing TIMS dataset into cached_opentims",
+                ):
                     # print(frame)
                     DW.append_df(pd.DataFrame(frame))
 

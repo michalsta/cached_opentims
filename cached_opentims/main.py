@@ -1,12 +1,13 @@
 import sys
 from pathlib import Path
 
+from tqdm import tqdm
+
+import mmapped_df
+import numba
 import numpy as np
 import pandas as pd
-import numba
-from tqdm import tqdm
 from opentimspy import OpenTIMS
-import mmapped_df
 
 
 @numba.njit
@@ -135,7 +136,7 @@ class CachedOpenTIMS:
                 T,
             )
             acc[colname] = T
-        return pd.DataFrame(acc)
+        return pd.DataFrame(acc, copy=False)
 
 
 #    def mz_box_query(self, frames, min_scan, max_scan, mz_min, mz_max):

@@ -4,6 +4,8 @@ import numba
 import numpy as np
 import numpy.typing as npt
 
+from .misc import assign
+
 
 @numba.njit
 def minmax(xx, _min=math.inf, _max=-math.inf):
@@ -50,3 +52,25 @@ def cumsum(xx: npt.NDArray, inplace: bool = False) -> npt.NDArray:
         xx,
         out=xx.reshape(np.prod(xx.shape)) if inplace else None,
     ).reshape(xx.shape)
+
+
+def counts_to_cumsum_idx(counts: npt.NDArray) -> npt.NDArray:
+    """Counts to cumsums.
+
+    Arguments:
+        counts (npt.NDArray): tensor of any dimension.
+
+    Returns:
+        npt.NDArray: tensor with the input dimension plus one, containing C-order cumsums @1 and index-lagged cumsums @0.
+    """
+    long_cumsums = np.cumsum(counts.flatten())
+    cumsum_idx = np.zeros(
+        shape=counts.shape + (2,),
+        dtype=counts.dtype,
+    )
+    curr = cumsum_idx[..., 1].reshape(np.prod(counts.shape))
+    assign(curr, long_cumsums)
+    prev = cumsum_idx[..., 0].reshape(np.prod(counts.shape))
+    assign(prev[1:], long_cumsums[:-1])
+    assert np.all(cumsum_idx[..., 0] <= cumsum_idx[..., 1])
+    return cumsum_idx

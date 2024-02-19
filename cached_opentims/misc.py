@@ -1,6 +1,8 @@
 import math
 
 import numba
+import numpy as np
+import numpy.typing as npt
 
 
 @numba.njit
@@ -35,3 +37,17 @@ def assign(xx, yy):
     assert len(xx) == len(yy)
     for i in range(len(xx)):
         xx[i] = yy[i]
+
+
+@numba.njit
+def expand_left_right_indices(left_right_idxs) -> npt.NDArray:
+    cnt = 0
+    for left_idx, right_idx in left_right_idxs:
+        cnt += right_idx - left_idx
+    expanded = np.empty(shape=(cnt,), dtype=left_right_idxs.dtype)
+    j = 0
+    for left_idx, right_idx in left_right_idxs:
+        for idx in range(left_idx, right_idx):
+            expanded[j] = idx
+            j += 1
+    return expanded

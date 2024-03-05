@@ -27,10 +27,9 @@ args = parser.parse_args()
 
 
 if __name__ == "__main__":
-    assert not args.output_startrek.exists(), "Folder exists: it ain't allowed. act."
-
     dump_tdf_to_startrek(
         rawdata_path=args.folder_d,
         output_folder=args.output_startrek,
         _progressbar_message=args.progressbar_message,
+        overwrite_dir=True,
     )

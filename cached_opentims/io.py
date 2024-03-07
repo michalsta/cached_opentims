@@ -82,7 +82,7 @@ def create_and_open_cached_tdf(
     """
     folder_startrek = Path(folder_startrek)
 
-    _fresh = not folder_startrek.exists()
+    _fresh = not (folder_startrek / "schema.txt").exists()
     if _fresh:
         assert folder_d is not None
         folder_d = Path(folder_d)
@@ -128,4 +128,6 @@ def create_and_open_cached_tdf(
         )[0]
         Frames = pd.read_parquet(folder_startrek / "frames.parquet")
 
+    # TODO: add copying of analysis.tdf instead of Frames.
+    # subprocess cp --reflink=auto
     return df, starts, counts, maxes, Frames

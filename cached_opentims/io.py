@@ -1,3 +1,5 @@
+import sqlite3
+import subprocess
 import typing
 from pathlib import Path
 
@@ -69,6 +71,7 @@ def create_and_open_cached_tdf(
     """
     Dump raw tdf format into startrek format if necessary and then open it.
     Dump also basic statistics such as maxes, and tables mapping frame and scan to start (whatever it is) and counts of events.
+    Copy `analysis.tdf` for completeness..
 
     Arguments:
         folder_d (Path|str|None): Path to the .d folder with data in the tdf format. Might be neglected when the 'folder_startrek' exists.
@@ -118,16 +121,21 @@ def create_and_open_cached_tdf(
         )
         np.save(folder_startrek / "counts.npy", counts)
         np.save(folder_startrek / "starts.npy", starts)
-        Frames = pd.DataFrame(raw_data_handler.frames)
-        Frames.to_parquet(folder_startrek / "frames.parquet")
+
+        subprocess.run(
+            f"cp --reflink=auto {folder_d / 'analysis.tdf'} {folder_startrek / 'analysis.tdf'}",
+            shell=True,
+        ).check_returncode()
+        # Frames = pd.DataFrame(raw_data_handler.frames)
+        # Frames.to_parquet(folder_startrek / "frames.parquet")
     else:
         counts = np.load(folder_startrek / "counts.npy")
         starts = np.load(folder_startrek / "starts.npy")
         maxes = pd.read_parquet(folder_startrek / "maxes.parquet").to_dict(
             orient="records"
         )[0]
-        Frames = pd.read_parquet(folder_startrek / "frames.parquet")
 
-    # TODO: add copying of analysis.tdf instead of Frames.
+    sql_connection = sqlite3.connect(folder_startrek / "analysis.tdf")
+
     # subprocess cp --reflink=auto
-    return df, starts, counts, maxes, Frames
+    return df, starts, counts, maxes, sql_connection

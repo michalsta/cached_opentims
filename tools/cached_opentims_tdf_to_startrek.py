@@ -19,7 +19,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--progressbar_message",
-    help="Path to the output folder.",
+    help="Message to display in progressbar.",
     default="Dumping .tdf to .startrek",
 )
 

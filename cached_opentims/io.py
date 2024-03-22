@@ -123,8 +123,12 @@ def create_and_open_cached_tdf(
         np.save(folder_startrek / "starts.npy", starts)
 
         subprocess.run(
-            f"cp --reflink=auto {folder_d / 'analysis.tdf'} {folder_startrek / 'analysis.tdf'}",
-            shell=True,
+            [
+                "cp",
+                "--reflink=auto",
+                folder_d / "analysis.tdf",
+                folder_startrek / "analysis.tdf",
+            ],
         ).check_returncode()
         # Frames = pd.DataFrame(raw_data_handler.frames)
         # Frames.to_parquet(folder_startrek / "frames.parquet")
@@ -137,5 +141,4 @@ def create_and_open_cached_tdf(
 
     sql_connection = sqlite3.connect(folder_startrek / "analysis.tdf")
 
-    # subprocess cp --reflink=auto
     return df, starts, counts, maxes, sql_connection

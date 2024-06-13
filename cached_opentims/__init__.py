@@ -1,1 +1,1 @@
-from .main import CachedOpenTIMS
+from .main import CachedOpenTIMS, MmappedOpenTIMS

@@ -139,6 +139,6 @@ def create_and_open_cached_tdf(
             orient="records"
         )[0]
 
-    sql_connection = sqlite3.connect(folder_startrek / "analysis.tdf")
+    analysis_tdf = folder_startrek / "analysis.tdf"
 
-    return df, starts, counts, maxes, sql_connection
+    return df, starts, counts, maxes, analysis_tdf

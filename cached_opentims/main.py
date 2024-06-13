@@ -98,10 +98,20 @@ class CachedOpenTIMS:
         return pd.DataFrame(acc, copy=False)
 
 
-#    def mz_box_query(self, frames, min_scan, max_scan, mz_min, mz_max):
-#        if not isinstance(frames, np.ndarray):
-#            frames = np.array(frames, dtype=np.uint64)
-#        indices =
+class MmappedOpenTIMS:
+    def __init__(self, folder_startrek: Path | str, **kwargs):
+        folder_startrek = Path(folder_startrek)
+        assert (
+            folder_startrek.suffix == ".startrek"
+        ), "Wrong extension of the memmapped file."
+
+        (
+            self.dataset,
+            self.starts,
+            self.counts,
+            self.maxes,
+            self.analysis_tdf,
+        ) = create_and_open_cached_tdf(folder_startrek=folder_startrek, **kwargs)
 
 
 if __name__ == "__main__":

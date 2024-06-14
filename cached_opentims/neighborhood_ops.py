@@ -325,6 +325,32 @@ def visit_neighbors(
                                     )
 
 
+@numba.njit(parallel=True)
+def ParallelMap(
+    foo: numba.core.registry.CPUDispatcher,
+    indices: npt.NDArray,
+    progress_proxy: ProgressBar,
+    *foo_args,
+):
+    for idx in numba.prange(len(indices)):
+        foo(idx, *foo_args)
+        progress_proxy.update(1)
+
+
+# all this would be more elegant if events were bundled together in one struct
+def visit_neighbors_using_sparse_diffs(
+    idx: int,
+    event_idxs: npt.NDArray,
+    middle_frame: np.uint32,
+    middle_scan: np.uint32,
+    middle_tof: np.uint32,
+    middle_intensity: np.uint32,
+    sparse_diffs: npt.NDArray,
+):
+    event_id = event_idxs[idx]  # the real number of event in the sparse data tables.
+    pass
+
+
 def report_neighbor_idxs(
     left_frame: np.uint32,
     right_frame: np.uint32,

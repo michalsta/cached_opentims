@@ -3,6 +3,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
+import duckdb
 import mmapped_df
 import numba
 import numpy as np
@@ -106,12 +107,21 @@ class MmappedOpenTIMS:
         ), "Wrong extension of the memmapped file."
 
         (
-            self.dataset,
-            self.starts,
-            self.counts,
+            self.dataset_df,
+            self.frame_scan_starts,
+            self.frame_scan_counts,
             self.maxes,
             self.analysis_tdf,
         ) = create_and_open_cached_tdf(folder_startrek=folder_startrek, **kwargs)
+        self.dataset = {
+            col: self.dataset_df[col].to_numpy() for col in self.dataset_df.columns
+        }
+
+        self.duckcon = duckdb.connect()
+        self.duckcon.execute(
+            "ATTACH DATABASE '{}' AS analysis_tdf; ".format(self.analysis_tdf)
+        )
+        self.Frames = self.duckcon.execute("SELECT * FROM analysis_tdf.Frames;").df()
 
 
 if __name__ == "__main__":

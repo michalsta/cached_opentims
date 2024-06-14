@@ -12,6 +12,7 @@ setup(
     description="Memory-mapped, on-disk-extraced, indexed access to TIMS TOF data. Ay comrad.",
     packages=find_packages(),
     install_requires=[
+        "duckdb",
         "mmapped_df",
         "numba",
         "numba_progress",

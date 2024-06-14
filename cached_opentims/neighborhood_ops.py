@@ -348,7 +348,6 @@ def visit_neighbors_using_sparse_diffs(
     sparse_diffs: npt.NDArray,
 ):
     event_id = event_idxs[idx]  # the real number of event in the sparse data tables.
-    pass
 
 
 def report_neighbor_idxs(

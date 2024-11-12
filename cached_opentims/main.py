@@ -59,10 +59,12 @@ def mz_filtered_indices(frames, scan_min, scan_max, starts, counts, src, T):
 
 
 class CachedOpenTIMS:
-    def __init__(self, path, tmpdir=None, dont_recalculate=True):
+    def __init__(self, path, cache_dir=None, dont_recalculate=True):
         path = Path(path)
-        assert tmpdir is None
-        cache_dir = Path(str(path) + ".cache")
+        if cache_dir is None:
+            cache_dir = Path(str(path) + ".cache")
+        else:
+            cache_dir = Path(cache_dir)
 
         (
             self.backend,

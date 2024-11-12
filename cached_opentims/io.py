@@ -54,6 +54,7 @@ def index(frames, scans, starts, counts):
             last_frame = starts[frame, scan]
 
 
+# TODO: speed up using preallocated datasets and RAM intermediary.
 def create_and_open_cached_tdf(
     folder_startrek: Path | str,
     folder_d: Path | str | None = None,

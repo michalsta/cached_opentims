@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools >= 64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name="cached_opentims"
+version="0.0.2"
+description="Memory-mapped, on-disk-extraced, indexed access to TIMS TOF data. Ay comrad."
+readme="README.md"
+authors=[
+    {name="Michał Piotr Startek",email="michalsta@mimuw.edu.pl"},
+    {name="Mateusz Krzysztof Łącki",email="matteo.lacki@gmail.com"},
+]
+dependencies = [
+    "duckdb",
+    "mmapped_df",
+    "numba",
+    "numba_progress",
+    "numpy",
+    "opentimspy",
+    "pandas",
+]
+
+[project.scripts]
+cached_opentims_tdf_to_startrek = "cached_opentims.tools.cached_opentims_tdf_to_startrek:main"
+# run_general_sql = "cached_opentims.tools.df_manipulation:run_general_sql"
+
+[project.urls]
+homepage="https://github.com/michalsta/cached_opentims"
+repository="https://github.com/michalsta/cached_opentims"
+
+[tool.uv]
+reinstall-package = ["cached_opentims"]
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+

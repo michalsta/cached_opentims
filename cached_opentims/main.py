@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
-
-from tqdm import tqdm
+from warnings import warn
 
 import duckdb
 import mmapped_df
@@ -10,6 +9,7 @@ import numpy as np
 import pandas as pd
 from cached_opentims.io import create_and_open_cached_tdf
 from opentimspy import OpenTIMS
+from tqdm import tqdm
 
 
 @numba.njit()
@@ -104,9 +104,8 @@ class CachedOpenTIMS:
 class MmappedOpenTIMS:
     def __init__(self, folder_startrek: Path | str, **kwargs):
         folder_startrek = Path(folder_startrek)
-        assert (
-            folder_startrek.suffix == ".startrek"
-        ), "Wrong extension of the memmapped file."
+        if folder_startrek.suffix != ".startrek":
+            warn("Expected .startrek extension.")
 
         (
             self.dataset_df,

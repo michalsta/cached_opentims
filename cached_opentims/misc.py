@@ -51,3 +51,13 @@ def expand_left_right_indices(left_right_idxs) -> npt.NDArray:
             expanded[j] = idx
             j += 1
     return expanded
+
+
+def array_size_in_mb(array):
+    return array.nbytes / (1024 * 1024)
+
+
+def get_min_unsign_int_data_type(x):
+    exps = [8, 16, 32, 64]
+    exp = exps[np.searchsorted(exps, np.log2(x))]
+    return eval(f"np.uint{exp}")

@@ -12,6 +12,104 @@ import pandas as pd
 from .stats import count2D, minmax
 
 
+def counts_to_index(counts):
+    """Change counts to index.
+
+    DO NOT USE NUMBA ON IT: IT DOES NOT WORK.
+
+    index[a,b,...,z] = the total number of entries before observing (a,b,...,z).
+    Given python 0-based indexing = the first occurrence of (a,b,...,z).
+    """
+    cumsums = counts.cumsum()
+    index = np.zeros(cumsums.shape, dtype=cumsums.dtype)
+    index[1:] = cumsums[:-1]
+    index = index.reshape(counts.shape)
+    return index
+
+
+@numba.njit(parallel=True)
+def funny_map(progress_proxy, N, foo, *foo_args):
+    for idx in numba.prange(N):
+        foo(idx, *foo_args)
+        progress_proxy.update(1)
+
+
+@numba.njit
+def binary_search(sorted_list, value):
+    """np.searchsorted equivalent. but a bit slower."""
+    left = 0
+    right = len(sorted_list)
+    while left < right:
+        mid = (left + right) // 2
+        if sorted_list[mid] < value:
+            left = mid + 1
+        else:
+            right = mid
+    return left
+
+
+@numba.njit(boundscheck=True)
+def map_3D_box(IDX, XX, YY, ZZ, XY2IDX, X_tol, Y_tol, Z_tol, foo, *foo_args):
+    """
+    Iterate over all points around a 3D box represented sparsely by integer based coordinates.
+
+    Box parametrization: [WW[IDX] - W_tol, WW[IDX] - W_tol] for W in [X,Y,Z].
+
+    Arguments:
+        IDX: the index of the current point.
+        XX: all sparse x coordinates
+        YY: all sparse y coordinates
+        ZZ: all sparse z coordinates
+        XY2IDX: (x,y) -> 1st occurence of (x,y) in the sparse format.
+        X_tol: Tollerance in the x dim.
+        Y_tol: Tollerance in the y dim.
+        Z_tol: Tollerance in the z dim.
+        foo: function to apply to each point in the box.
+        *foo_args: other foo's arguments.
+    """
+    MIN_X = 0
+    MAX_X = XY2IDX.shape[0] - 1
+    MIN_Y = 0
+    MAX_Y = XY2IDX.shape[1] - 2
+    X = XX[IDX]
+    Y = YY[IDX]
+    Z = ZZ[IDX]
+    for x in range(max(X - X_tol, MIN_X), min(X + X_tol, MAX_X) + 1):
+        for y in range(max(Y - Y_tol, MIN_Y), min(Y + Y_tol, MAX_Y) + 1):
+            idx_start = XY2IDX[x, y]
+            idx_end = XY2IDX[x, y + 1]
+            if idx_start < idx_end:
+                # Making those searches separate likely removes need to allocate
+                # memory for an intermediary array.
+                idx_left = idx_start + np.searchsorted(ZZ[idx_start:idx_end], Z - Z_tol)
+                idx_right = idx_start + np.searchsorted(
+                    ZZ[idx_start:idx_end], Z + Z_tol + 1
+                )
+                for idx in range(idx_left, idx_right):
+                    z = ZZ[idx]
+                    foo(IDX, idx, X, Y, Z, x, y, z, *foo_args)
+
+
+@numba.njit(parallel=True, boundscheck=True)
+def map_on_events(
+    progress_proxy,
+    all_frames,
+    all_scans,
+    all_tofs,
+    foo,
+    *foo_args,
+):
+    assert len(all_frames) == len(all_tofs)
+    assert len(all_frames) == len(all_scans)
+    for idx in numba.prange(len(all_frames)):
+        frame = all_frames[idx]
+        scan = all_scans[idx]
+        tof = all_tofs[idx]
+        foo(idx, frame, scan, tof, *foo_args)
+        progress_proxy.update(1)
+
+
+# obsolete
 @numba.njit(parallel=True)
 def map3Dsubsets(
     foo,

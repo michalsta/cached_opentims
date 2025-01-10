@@ -48,6 +48,18 @@ def binary_search(sorted_list, value):
     return left
 
 
+@numba.njit
+def binary_search2(sorted_list, left, right, value):
+    """np.searchsorted equivalent. but a bit slower."""
+    while left < right:
+        mid = (left + right) // 2
+        if sorted_list[mid] < value:
+            left = mid + 1
+        else:
+            right = mid
+    return left
+
+
 @numba.njit(boundscheck=True)
 def map_3D_box(IDX, XX, YY, ZZ, XY2IDX, X_tol, Y_tol, Z_tol, foo, *foo_args):
     """
@@ -67,27 +79,70 @@ def map_3D_box(IDX, XX, YY, ZZ, XY2IDX, X_tol, Y_tol, Z_tol, foo, *foo_args):
         foo: function to apply to each point in the box.
         *foo_args: other foo's arguments.
     """
-    MIN_X = 0
-    MAX_X = XY2IDX.shape[0] - 1
-    MIN_Y = 0
-    MAX_Y = XY2IDX.shape[1] - 2
-    X = XX[IDX]
-    Y = YY[IDX]
-    Z = ZZ[IDX]
+    MIN_X = np.intp(0)  # casting to proper type to avoid the uint shannanigans...
+    MAX_X = np.intp(XY2IDX.shape[0] - 1)
+    MIN_Y = np.intp(0)
+    MAX_Y = np.intp(XY2IDX.shape[1] - 2)
+    X = np.intp(XX[IDX])
+    Y = np.intp(YY[IDX])
+    Z = np.intp(ZZ[IDX])
     for x in range(max(X - X_tol, MIN_X), min(X + X_tol, MAX_X) + 1):
         for y in range(max(Y - Y_tol, MIN_Y), min(Y + Y_tol, MAX_Y) + 1):
-            idx_start = XY2IDX[x, y]
-            idx_end = XY2IDX[x, y + 1]
+            idx_start = np.intp(XY2IDX[x, y])
+            idx_end = np.intp(XY2IDX[x, y + 1])
             if idx_start < idx_end:
-                # Making those searches separate likely removes need to allocate
-                # memory for an intermediary array.
-                idx_left = idx_start + np.searchsorted(ZZ[idx_start:idx_end], Z - Z_tol)
-                idx_right = idx_start + np.searchsorted(
-                    ZZ[idx_start:idx_end], Z + Z_tol + 1
-                )
-                for idx in range(idx_left, idx_right):
-                    z = ZZ[idx]
+                idx_start += np.searchsorted(
+                    ZZ[idx_start:idx_end], Z - Z_tol
+                )  # get on right stripe.
+                for idx in range(idx_start, idx_end):  # at most one look-up too far
+                    z = np.intp(ZZ[idx])
+                    if abs(z - Z) > Z_tol:
+                        break
                     foo(IDX, idx, X, Y, Z, x, y, z, *foo_args)
+
+
+@numba.njit(boundscheck=True)
+def update_neighbor_intensity(
+    IDX, idx, X, Y, Z, x, y, z, intensities, neighbor_intensity
+):
+    neighbor_intensity[IDX] += intensities[idx]
+
+
+def extract_box_inefficiently(
+    raw_data_handler, cycle, scan, tof, cycle_tol, scan_tol, tof_tol
+):
+    """Extract data-box inefficiently for testing purposes."""
+    min_cycle = 0
+    if cycle > cycle_tol:
+        min_cycle = cycle - cycle_tol
+    max_cycle = cycle + cycle_tol
+    frames = raw_data_handler.ms1_frames[min_cycle : max_cycle + 1]
+
+    datasets = []
+    for _cycle in range(min_cycle, max_cycle + 1):
+        X = pd.DataFrame(
+            raw_data_handler.query(
+                frames=raw_data_handler.ms1_frames[_cycle],
+                columns=["scan", "tof", "intensity"],
+            )
+        )
+        X["cycle"] = _cycle
+        datasets.append(X)
+
+    data = pd.concat(datasets).sort_values(["cycle", "scan", "tof"])
+
+    min_scan = 0
+    if scan > scan_tol:
+        min_scan = scan - scan_tol
+    max_scan = scan + scan_tol
+
+    min_tof = 0
+    if tof > tof_tol:
+        min_tof = tof - tof_tol
+    max_tof = tof + tof_tol
+    return data.query(
+        f"scan >= @min_scan and scan <= @max_scan and tof >= @min_tof and tof <= @max_tof"
+    )
 
 
 @numba.njit(parallel=True, boundscheck=True)

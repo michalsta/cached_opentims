@@ -6,6 +6,8 @@ from IPython import get_ipython
 from numba_progress import ProgressBar
 from tqdm import tqdm
 
+import clusterMS.plotting
+import duckdb
 import matplotlib.pyplot as plt
 import mmapped_df
 import numba
@@ -14,9 +16,16 @@ import numpy.typing as npt
 import opentimspy
 import pandas as pd
 from cached_opentims.misc import get_min_unsign_int_data_type
-from cached_opentims.neighborhood_ops import (counts_to_index, funny_map,
-                                              map_3D_box)
+from cached_opentims.neighborhood_ops import (
+    counts_to_index,
+    extract_box_inefficiently,
+    funny_map,
+    map_3D_box,
+)
 from cached_opentims.stats import count2D, minmax
+from clusterMS.plotting import scat3D
+from kilograms.histogramming import discrete_histogram1D, min_max, scatterplot_matrix
+from matplotlib.colors import Normalize
 from numpy.lib.stride_tricks import as_strided
 from pandas_ops.io import read_df
 from snakemaketools.datastructures import DotDict
@@ -86,142 +95,54 @@ cycle_scan_to_index = counts_to_index(counts)
 
 
 cycle_tol = 2
-scan_tol = 3
-tof_tol = 3
+scan_tol = 5
+tof_tol = 10
 
 
 @numba.njit(boundscheck=True)
-def update_count(IDX, idx, X, Y, Z, x, y, z, intensities, results):
-    results[IDX] += intensities[idx]
+def get_event_stats(
+    IDX,
+    idx,
+    X,
+    Y,
+    Z,
+    x,
+    y,
+    z,
+    intensities,
+    nb_cnts,
+    nb_intensities,
+    nb_top_intensities,
+    nb_top_intense_idxs,
+    # correlation,
+):
+    I = intensities[idx]
+    nb_intensities[IDX] += I
+    nb_cnts[IDX] += 1
+    if nb_top_intensities[IDX] < I:
+        nb_top_intensities[IDX] = I
+        nb_top_intense_idxs[IDX] = idx
 
 
-def discrete_histogram(x, value_name="value"):
-    """Summarize discrete data."""
-    return (
-        pd.DataFrame(collections.Counter(x).items(), columns=(value_name, "cnt"))
-        .sort_values(value_name)
-        .set_index(value_name)
-    )
+max_nb_cnt = (cycle_tol * 2 + 1) * (scan_tol * 2 + 1) * (tof_tol * 2 + 1)
 
 
-neighbors = np.zeros(dtype=np.uint32, shape=peaks_cnt)
+nb = pd.DataFrame(
+    dict(
+        cnts=np.zeros(dtype=get_min_unsign_int_data_type(max_nb_cnt), shape=peaks_cnt),
+        intensities=np.zeros(dtype=np.uint32, shape=peaks_cnt),
+        top_intensities=np.zeros(
+            dtype=get_min_unsign_int_data_type(maxes.intensity), shape=peaks_cnt
+        ),
+        top_intense_idxs=np.zeros(dtype=np.uint32, shape=peaks_cnt),
+    ),
+    copy=False,
+)
 
 with ProgressBar(total=peaks_cnt, desc="test") as progress_proxy:
     funny_map(
         progress_proxy,
         peaks_cnt,
-        map_3D_box2,
-        df.cycle,
-        df.scan,
-        df.tof,
-        cycle_scan_to_index,
-        cycle_tol,
-        scan_tol,
-        tof_tol,
-        update_count,  # TODO: implement
-        df.intensity,
-        neighbors,
-    )
-
-minmax(neighbors)
-
-
-@numba.njit
-def numba_print(IDX, idx, X, Y, Z, x, y, z, *args):
-    print(
-        "IDX =",
-        IDX,
-        "idx =",
-        idx,
-        "X =",
-        X,
-        "Y =",
-        Y,
-        "Z =",
-        Z,
-        "x =",
-        x,
-        "y =",
-        y,
-        "z =",
-        z,
-        "args = ",
-        args,
-    )
-
-
-@numba.njit
-def binary_search(sorted_list, left, right, value):
-    """np.searchsorted equivalent. but a bit slower."""
-    while left < right:
-        mid = (left + right) // 2
-        if sorted_list[mid] < value:
-            left = mid + 1
-        else:
-            right = mid
-    return left
-
-
-
-@numba.njit(boundscheck=True)
-def map_3D_box2(IDX, XX, YY, ZZ, XY2IDX, X_tol, Y_tol, Z_tol, foo, *foo_args):
-    MIN_X = np.int64(0)
-    MAX_X = np.int64(XY2IDX.shape[0] - 1)
-    MIN_Y = np.int64(0)
-    MAX_Y = np.int64(XY2IDX.shape[1] - 2)
-    X = np.int64(XX[IDX])
-    Y = np.int64(YY[IDX])
-    Z = np.int64(ZZ[IDX])
-    for x in range(max(X - X_tol, MIN_X), min(X + X_tol, MAX_X) + 1):
-        for y in range(max(Y - Y_tol, MIN_Y), min(Y + Y_tol, MAX_Y) + 1):
-            idx_start = np.int64(XY2IDX[x, y])
-            idx_end = np.int64(XY2IDX[x, y + 1])
-            if idx_start < idx_end:
-                idx_start += np.searchsorted(
-                    ZZ[idx_start:idx_end], Z - Z_tol
-                )  # get on right stripe.
-                for idx in range(idx_start, idx_end): # at most one look-up too far
-                    z = np.int64(ZZ[idx])
-                    if abs(z - Z) > Z_tol:
-                        break
-                    foo(IDX, idx, X, Y, Z, x, y, z, *foo_args)
-
-
-map_3D_box2(IDX, XX, YY, ZZ, XY2IDX, X_tol, Y_tol, Z_tol, foo)
-
-IDX = 1
-XX = df.cycle
-YY = df.scan
-ZZ = df.tof
-XY2IDX = cycle_scan_to_index
-X_tol = cycle_tol
-Y_tol = scan_tol
-Z_tol = tof_tol
-foo = numba_print
-
-map_3D_box(IDX, XX, YY, ZZ, XY2IDX, X_tol, Y_tol, Z_tol, foo)
-
-
-N = 1
-with ProgressBar(total=N, desc=None) as progress_proxy:
-    funny_map(
-        progress_proxy,
-        N,
-        map_3D_box2,
-        df.cycle,
-        df.scan,
-        df.tof,
-        cycle_scan_to_index,
-        cycle_tol,
-        scan_tol,
-        tof_tol,
-        numba_print,
-    )
-
-with ProgressBar(total=N, desc=None) as progress_proxy:
-    funny_map(
-        progress_proxy,
-        N,
         map_3D_box,
         df.cycle,
         df.scan,
@@ -230,129 +151,116 @@ with ProgressBar(total=N, desc=None) as progress_proxy:
         cycle_tol,
         scan_tol,
         tof_tol,
-        numba_print,
-    )
-
-N = 10_000_000
-
-%%timeit
-neighbors4 = np.zeros(dtype=np.uint32, shape=N)
-with ProgressBar(total=N, desc="test") as progress_proxy:
-    funny_map(
-        progress_proxy,
-        N,
-        map_3D_box3,
-        df.cycle,
-        df.scan,
-        df.tof,
-        cycle_scan_to_index,
-        cycle_tol,
-        scan_tol,
-        tof_tol,
-        update_count,  # TODO: implement
+        get_event_stats,  # TODO: implement
         df.intensity,
-        neighbors4,
+        nb.cnts.to_numpy(),
+        nb.intensities.to_numpy(),
+        nb.top_intensities.to_numpy(),
+        nb.top_intense_idxs.to_numpy(),
     )
 
 
-%%timeit
-neighbors2 = np.zeros(dtype=np.uint32, shape=N)
-with ProgressBar(total=N, desc="test") as progress_proxy:
-    funny_map(
-        progress_proxy,
-        N,
-        map_3D_box,
-        df.cycle,
-        df.scan,
-        df.tof,
-        cycle_scan_to_index,
-        cycle_tol,
-        scan_tol,
-        tof_tol,
-        update_count,  # TODO: implement
-        df.intensity,
-        neighbors2,
-    )
+cnts_hist = discrete_histogram1D(nb.cnts.to_numpy())
+max_nb_cnt
+(cnts_hist.cumsum() / len(nb) * 100).round(1)
 
-%%timeit
-neighbors3 = np.zeros(dtype=np.uint32, shape=N)
-with ProgressBar(total=N, desc="test") as progress_proxy:
-    funny_map(
-        progress_proxy,
-        N,
-        map_3D_box2,
-        df.cycle,
-        df.scan,
-        df.tof,
-        cycle_scan_to_index,
-        cycle_tol,
-        scan_tol,
-        tof_tol,
-        update_count,  # TODO: implement
-        df.intensity,
-        neighbors3,
-    )
-
-np.all(neighbors2 == neighbors3)
+nb["intensity"] = df.intensity
 
 
-def extract_box_inefficiently(
-    raw_data_handler, cycle, scan, tof, cycle_tol, scan_tol, tof_tol
-):
-    min_cycle = 0
-    if cycle > cycle_tol:
-        min_cycle = cycle - cycle_tol
-    max_cycle = cycle + cycle_tol
-    frames = raw_data_handler.ms1_frames[min_cycle : max_cycle + 1]
+# how many points are not local max?
 
-    datasets = []
-    for _cycle in range(min_cycle, max_cycle + 1):
-        X = pd.DataFrame(
-            raw_data_handler.query(
-                frames=raw_data_handler.ms1_frames[_cycle],
-                columns=["scan", "tof", "intensity"],
-            )
-        )
-        X["cycle"] = _cycle
-        datasets.append(X)
+duckdb.query(
+    """
+SELECT
+COUNT(*) AS cnt
+FROM 'nb'
+WHERE top_intensities == intensity
+"""
+)
 
-    data = pd.concat(datasets).sort_values(["cycle", "scan", "tof"])
+top_hist = duckdb.query(
+    """
+SELECT
+cnts AS events,
+COUNT(*) AS cnt
+FROM 'nb'
+WHERE top_intensities == intensity
+GROUP BY cnts
+ORDER BY cnts
+"""
+).df()
 
-    min_scan = 0
-    if scan > scan_tol:
-        min_scan = scan - scan_tol
-    max_scan = scan + scan_tol
-
-    min_tof = 0
-    if tof > tof_tol:
-        min_tof = tof - tof_tol
-    max_tof = tof + tof_tol
-    return data.query(
-        f"scan >= @min_scan and scan <= @max_scan and tof >= @min_tof and tof <= @max_tof"
-    )
+plt.plot(top_hist.events, top_hist.cnt)
+plt.show()
+# we should find a good shape to `correlate to`.
 
 
-extract_box_inefficiently(
-    raw_data_handler, cycle, scan, tof, cycle_tol, scan_tol, tof_tol
+@numba.njit
+def non_local_max(top_intense_idxs):
+    cnt = 0
+    for i, top_intense_idx in enumerate(top_intense_idxs):
+        cnt += i == top_intense_idx
+    return cnt
+
+
+non_local_max(nb.top_intense_idxs.to_numpy())
+len(nb)
+
+dfpd = pd.DataFrame(df, copy=False)
+_, S, C, T = dfpd.iloc[nb.intensity.argmax()]
+
+
+def get_events_duckdb(events, cycle, scan, tof, cycle_tol, scan_tol, tof_tol, **kwargs):
+    return duckdb.query(
+        f"""
+    SELECT *, sqrt(intensity) AS sqrt_intensity
+    FROM 'dfpd' 
+    WHERE cycle >= {cycle}-{cycle_tol} and cycle <= {cycle}+{cycle_tol} and scan >= {scan} - {scan_tol} AND scan <= {scan} + {scan_tol} and tof >= {tof} - {tof_tol} and tof <= {tof} + {tof_tol}
+    """
+    ).df()
+
+
+some_events = get_events_duckdb(
+    dfpd,
+    **dict(dfpd.iloc[nb.intensity.argmax()]),
+    scan_tol=scan_tol * 10,
+    tof_tol=tof_tol,
+    cycle_tol=cycle_tol * 10,
 )
 
 
-@numba.njit
-def countevents(IDX, idx, X, Y, Z, x, y, z, res):
-    res[0] += 1
+clusterMS.plotting.df_to_scatterplot3D(
+    some_events[["cycle", "scan", "tof"]],
+    c=some_events.sqrt_intensity,
+    cmap="viridis",
+    alpha=0.8,
+)
+
+# code discrete scatterplot matrix.
+some_events["mz"] = raw_data_handler.tof_to_mz(
+    tof=some_events.tof.to_numpy(), frame=(some_events.cycle.to_numpy() + 1) * 21
+)
+
+cols_to_show = ["cycle", "scan", "tof", "mz"]
+extents = {
+    col: minmax(vals.to_numpy()) for col, vals in some_events[cols_to_show].items()
+}
+bins = {col: _max - _min for col, (_min, _max) in extents.items()}
+bins["mz"] = bins["tof"]
+
+scatterplot_matrix(
+    some_events[cols_to_show], weights=some_events.intensity, extents=extents, bins=bins
+)
 
 
-IDX = 10
-cycle = df.cycle[IDX]
-scan = df.scan[IDX]
-tof = df.tof[IDX]
+def discrete_histogram1D(xx, weights=None):
+    _min, _max = min_max(xx)
+    hist = np.zeros(dtype=np.uintp, shape=_max - _min + 1)
+    if weights != None:
+        assert len(weights) == len(xx)
+    for i, x in enumerate(xx):
+        hist[x - _min] += weights[i] if weights != None else 1
+    return np.arange(_min, _max + 1), hist
 
-res = np.array([0])
-map_3D_box(IDX, XX, YY, ZZ, XY2IDX, 2, 500, 1000, countevents, res)
-res2 = np.array([0])
-map_3D_box2(IDX, XX, YY, ZZ, XY2IDX, 2, 500, 1000, countevents, res2)
 
-extract_box_inefficiently(raw_data_handler, cycle, scan, tof, 2, 500, 1000)
-res
-res2
-# OK, map3D_box works, map3D_box2 not
+discrete_histogram1D(some_events.tof.to_numpy(), some_events.intensity.to_numpy())
